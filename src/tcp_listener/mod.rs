@@ -1,11 +1,11 @@
-use pnet::packet::tcp::{MutableTcpPacket, TcpFlags};
+use pnet::datalink::{self, Channel::Ethernet};
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::MutableIpv4Packet;
+use pnet::packet::tcp::{MutableTcpPacket, TcpFlags};
 use pnet::packet::Packet;
 use pnet::util::checksum;
-use pnet::datalink::{self, Channel::Ethernet};
-use std::net::Ipv4Addr;
 use std::env;
+use std::net::Ipv4Addr;
 
 // start listening to tcp
 pub fn start_tcp_listener() {
@@ -22,7 +22,8 @@ pub fn start_tcp_listener() {
     };
 
     // find the device corresponding to the selected interface
-    let device = pcap::Device::list().unwrap()
+    let device = pcap::Device::list()
+        .unwrap()
         .into_iter()
         .find(|dev| dev.name == interface)
         .unwrap_or_else(|| {
@@ -31,11 +32,16 @@ pub fn start_tcp_listener() {
         });
 
     // open the capture on the found device
-    let mut cap = pcap::Capture::from_device(device).unwrap()
+    let mut cap = pcap::Capture::from_device(device)
+        .unwrap()
         .timeout(1000) // Timeout to avoid blocking indefinitely
-        .open().unwrap();
+        .open()
+        .unwrap();
 
-    println!("Listening for incoming TCP SYN packets on interface {}...", interface);
+    println!(
+        "Listening for incoming TCP SYN packets on interface {}...",
+        interface
+    );
 
     // capture packets in a loop
     while let Ok(packet) = cap.next_packet() {
@@ -56,14 +62,21 @@ pub fn get_interface_name() -> Option<String> {
 }
 
 /// send the SYN/ACK packet
-fn send_syn_ack(interface_name: &str, src_ip: Ipv4Addr, dst_ip: Ipv4Addr, src_port: u16, dst_port: u16) {
-    let interface = datalink::interfaces().into_iter()
+fn send_syn_ack(
+    interface_name: &str,
+    src_ip: Ipv4Addr,
+    dst_ip: Ipv4Addr,
+    src_port: u16,
+    dst_port: u16,
+) {
+    let interface = datalink::interfaces()
+        .into_iter()
         .find(|iface| iface.name == interface_name)
         .expect("Could not find the specified interface");
 
     // create a buffer for the packet
     let mut ipv4_buffer = [0u8; 20]; // IPv4 header length is 20 bytes
-    let mut tcp_buffer = [0u8; 20];  // TCP header length is 20 bytes
+    let mut tcp_buffer = [0u8; 20]; // TCP header length is 20 bytes
 
     // create mutable IPv4 and TCP packets
     let mut ipv4_packet = MutableIpv4Packet::new(&mut ipv4_buffer[..]).unwrap();
@@ -102,7 +115,7 @@ fn send_syn_ack(interface_name: &str, src_ip: Ipv4Addr, dst_ip: Ipv4Addr, src_po
         Ok(Ethernet(mut tx, _)) => {
             let _ = tx.send_to(&final_packet, None).unwrap();
             println!("Sent SYN/ACK packet");
-        },
+        }
         Ok(_) => panic!("Unhandled channel type"),
         Err(e) => panic!("Failed to send packet: {}", e),
     }
@@ -131,7 +144,10 @@ pub fn handle_packet(packet: &[u8], interface: &str) {
 
     // check if packet is a SYN packet
     if tcp_flags & 0x02 != 0 {
-        println!("Received SYN from {}:{} to {}:{}", src_ip, src_port, dst_ip, dst_port);
+        println!(
+            "Received SYN from {}:{} to {}:{}",
+            src_ip, src_port, dst_ip, dst_port
+        );
 
         // send a SYN/ACK response
         send_syn_ack(interface, dst_ip, src_ip, dst_port, src_port);
