@@ -1,21 +1,22 @@
-extern crate pnet_packet;
-extern crate pnet_datalink;
 extern crate pnet_base;
+extern crate pnet_datalink;
+extern crate pnet_packet;
 
-use pnet_datalink::Channel::Ethernet;
-use pnet_packet::Packet;
-use pnet_packet::arp::{ArpPacket, ArpOperations, MutableArpPacket, ArpHardwareTypes};
-use pnet_packet::ethernet::{EtherTypes, MutableEthernetPacket, EthernetPacket};
 use pnet_base::MacAddr;
+use pnet_datalink::Channel::Ethernet;
+use pnet_packet::arp::{ArpHardwareTypes, ArpOperations, ArpPacket, MutableArpPacket};
+use pnet_packet::ethernet::{EtherTypes, EthernetPacket, MutableEthernetPacket};
+use pnet_packet::MutablePacket;
+use pnet_packet::Packet;
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::{Duration, Instant};
-use pnet_packet::MutablePacket;
 
 /// Function to listen to ARP traffic and return target and sender IP addresses on detection
 pub fn listen_arp(interface_name: &str) -> (Ipv4Addr, Ipv4Addr) {
     let interfaces = pnet_datalink::interfaces();
-    let interface = interfaces.into_iter()
+    let interface = interfaces
+        .into_iter()
         .find(|iface| iface.name == interface_name)
         .expect(&format!("No such interface: {}", interface_name));
 
@@ -40,7 +41,7 @@ pub fn listen_arp(interface_name: &str) -> (Ipv4Addr, Ipv4Addr) {
                     &ethernet_packet,
                     &mut arp_request_count,
                     request_threshold,
-                    request_timeout
+                    request_timeout,
                 ) {
                     return (target_ip, sender_ip);
                 }
@@ -60,7 +61,8 @@ pub fn send_arp_reply(
     sender_mac: MacAddr,
 ) -> std::io::Result<()> {
     let interfaces = pnet_datalink::interfaces();
-    let interface = interfaces.into_iter()
+    let interface = interfaces
+        .into_iter()
         .find(|iface| iface.name == interface_name)
         .expect(&format!("No such interface: {}", interface_name));
 
@@ -77,12 +79,22 @@ pub fn send_arp_reply(
     ethernet_packet.set_source(sender_mac);
     ethernet_packet.set_ethertype(EtherTypes::Arp);
 
-    create_arp_packet(&mut ethernet_packet, sender_mac, sender_ip, target_mac, target_ip);
+    create_arp_packet(
+        &mut ethernet_packet,
+        sender_mac,
+        sender_ip,
+        target_mac,
+        target_ip,
+    );
 
-    let _ = tx.send_to(ethernet_packet.packet(), Some(interface))
+    let _ = tx
+        .send_to(ethernet_packet.packet(), Some(interface))
         .expect("Failed to send ARP reply");
 
-    println!("Sent ARP reply: {} is at {:?} from {}", target_ip, sender_mac, sender_ip);
+    println!(
+        "Sent ARP reply: {} is at {:?} from {}",
+        target_ip, sender_mac, sender_ip
+    );
     Ok(())
 }
 
@@ -113,9 +125,10 @@ fn track_arp_request(
     sender_ip: Ipv4Addr,
 ) -> Option<(Ipv4Addr, Ipv4Addr)> {
     let now = Instant::now();
-    let entry = arp_request_count
-        .entry(IpAddr::V4(target_ip))
-        .or_insert((0, now, IpAddr::V4(sender_ip)));
+    let entry =
+        arp_request_count
+            .entry(IpAddr::V4(target_ip))
+            .or_insert((0, now, IpAddr::V4(sender_ip)));
 
     if now.duration_since(entry.1) > request_timeout {
         entry.0 = 0;
