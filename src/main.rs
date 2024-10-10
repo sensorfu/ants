@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod arp_listener;
 mod tcp_listener;
 mod virtual_interface;

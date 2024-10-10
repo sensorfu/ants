@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 extern crate pnet_base;
 extern crate pnet_datalink;
 extern crate pnet_packet;
@@ -18,7 +19,7 @@ pub fn listen_arp(interface_name: &str) -> (Ipv4Addr, Ipv4Addr) {
     let interface = interfaces
         .into_iter()
         .find(|iface| iface.name == interface_name)
-        .expect(&format!("No such interface: {}", interface_name));
+        .unwrap_or_else(|| panic!("No such interface: {}", interface_name));
 
     let (_, mut rx) = match pnet_datalink::channel(&interface, Default::default()) {
         Ok(Ethernet(tx, rx)) => (tx, rx),
@@ -64,7 +65,7 @@ pub fn send_arp_reply(
     let interface = interfaces
         .into_iter()
         .find(|iface| iface.name == interface_name)
-        .expect(&format!("No such interface: {}", interface_name));
+        .unwrap_or_else(|| panic!("No such interface: {}", interface_name));
 
     let (mut tx, _) = match pnet_datalink::channel(&interface, Default::default()) {
         Ok(Ethernet(tx, rx)) => (tx, rx),
@@ -156,8 +157,8 @@ fn process_arp_packet(
     request_timeout: Duration,
 ) -> Option<(Ipv4Addr, Ipv4Addr)> {
     if let Some(arp_packet) = ArpPacket::new(ethernet_packet.payload()) {
-        let target_ip = Ipv4Addr::from(arp_packet.get_target_proto_addr());
-        let sender_ip = Ipv4Addr::from(arp_packet.get_sender_proto_addr());
+        let target_ip = arp_packet.get_target_proto_addr();
+        let sender_ip = arp_packet.get_sender_proto_addr();
         let sender_hw = arp_packet.get_sender_hw_addr();
 
         match arp_packet.get_operation() {
