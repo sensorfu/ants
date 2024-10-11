@@ -4,14 +4,12 @@ use pnet::packet::ipv4::MutableIpv4Packet;
 use pnet::packet::tcp::{MutableTcpPacket, TcpFlags};
 use pnet::packet::Packet;
 use pnet::util::checksum;
-use pnet_base::MacAddr;
-use pnet_packet::ethernet::MutableEthernetPacket;
 use std::net::Ipv4Addr;
 use std::thread;
 use std::time::{Duration, Instant};
 
-// start listening to tcp and respond to TCP handshakes in the given interface
-pub fn start_tcp_tarpitting(interface_name: &str, virtual_ip: Ipv4Addr, passive_mode: bool) {
+// start listening to tcp and respond to TCP handshake in the given interface
+pub fn start_tcp_listener(interface_name: &str) {
     let device = pcap::Device::list()
         .unwrap()
         .into_iter()
@@ -23,7 +21,7 @@ pub fn start_tcp_tarpitting(interface_name: &str, virtual_ip: Ipv4Addr, passive_
 
     let mut cap = pcap::Capture::from_device(device)
         .unwrap()
-        .immediate_mode(true)
+        .timeout(1000)
         .open()
         .unwrap();
 
@@ -32,24 +30,13 @@ pub fn start_tcp_tarpitting(interface_name: &str, virtual_ip: Ipv4Addr, passive_
         interface_name
     );
 
-    let timeout_duration = Duration::new(10, 0);
-    let mut last_response_time = Instant::now();
-
     while let Ok(packet) = cap.next_packet() {
-        let response_sent = handle_packet(packet.data, interface_name, virtual_ip, passive_mode);
-
-        if response_sent {
-            last_response_time = Instant::now()
-        }
-
-        if last_response_time.elapsed() >= timeout_duration {
-            println!("No response sent in the last 10 seconds, exiting tcp_listener.");
-            break;
-        }
-        thread::sleep(Duration::from_millis(300));
+        handle_packet(packet.data, interface_name);
+        println!("Packet captured");
     }
 }
 
+/// send the SYN/ACK packet
 fn send_syn_ack(
     interface_name: &str,
     dst_mac: MacAddr,
@@ -112,7 +99,8 @@ fn send_syn_ack(
     }
 }
 
-fn handle_packet(packet: &[u8], interface: &str, virtual_ip: Ipv4Addr, passive_mode: bool) -> bool {
+/// handle incoming packets and respond with SYN/ACK
+fn handle_packet(packet: &[u8], interface: &str) {
     if packet.len() < 54 {
         return false;
     }
