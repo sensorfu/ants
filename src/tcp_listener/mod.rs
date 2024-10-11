@@ -6,7 +6,7 @@ use pnet::packet::Packet;
 use pnet::util::checksum;
 use std::net::Ipv4Addr;
 
-// start listening to tcp and respond to TCP handshake in the given interface
+// start listening to tcp and respond to TCP handshakes in the given interface
 pub fn start_tcp_listener(interface_name: &str) {
     let device = pcap::Device::list()
         .unwrap()
@@ -16,6 +16,8 @@ pub fn start_tcp_listener(interface_name: &str) {
             eprintln!("Could not find device {}", interface_name);
             std::process::exit(1);
         });
+
+    println!("{:?}", device);
 
     let mut cap = pcap::Capture::from_device(device)
         .unwrap()
@@ -96,15 +98,28 @@ fn send_syn_ack(
 
 /// handle incoming packets and respond with SYN/ACK
 fn handle_packet(packet: &[u8], interface: &str) {
+    println!("{}", packet.len());
     if packet.len() < 54 {
         return; // packet too short to be valid TCP/IP
     }
 
-    // parse ethernet header (skip 14 bytes)
+    // Parse Ethernet type field (bytes 12 and 13)
     let ethertype = u16::from_be_bytes([packet[12], packet[13]]);
+    
+    // Check if the packet is IPv4 (EtherType 0x0800)
     if ethertype != 0x0800 {
-        return; // not an IPv4 packet
+        match ethertype {
+            0x0806 => println!("ARP packet"),
+            0x86DD => println!("IPv6 packet"),
+            0x8847 => println!("MPLS unicast packet"),
+            0x8848 => println!("MPLS multicast packet"),
+            _      => println!("Unknown packet type with EtherType: 0x{:04x}", ethertype),
+        }
+        return;
     }
+
+    // Continue processing the IPv4 packet
+    println!("This is an IPv4 packet");
 
     // parse IP header
     let src_ip = Ipv4Addr::new(packet[26], packet[27], packet[28], packet[29]);
