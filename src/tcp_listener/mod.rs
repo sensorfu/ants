@@ -98,7 +98,6 @@ fn send_syn_ack(
 
 /// handle incoming packets and respond with SYN/ACK
 fn handle_packet(packet: &[u8], interface: &str) {
-    println!("{}", packet.len());
     if packet.len() < 54 {
         return; // packet too short to be valid TCP/IP
     }
