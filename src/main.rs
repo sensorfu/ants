@@ -17,4 +17,7 @@ fn main() {
         VIRTUAL_INTERFACE_NAME,
         &target_ip.to_string(),
     );
+    tcp_listener::start_tcp_listener(VIRTUAL_INTERFACE_NAME);
+
+    virtual_interface::remove_macvlan_interface(VIRTUAL_INTERFACE_NAME);
 }

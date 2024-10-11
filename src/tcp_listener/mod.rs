@@ -4,61 +4,34 @@ use pnet::packet::ipv4::MutableIpv4Packet;
 use pnet::packet::tcp::{MutableTcpPacket, TcpFlags};
 use pnet::packet::Packet;
 use pnet::util::checksum;
-use std::env;
 use std::net::Ipv4Addr;
 
-// start listening to tcp
-pub fn start_tcp_listener() {
-    // enable backtraces
-    env::set_var("RUST_BACKTRACE", "1");
-
-    // get the first available non-loopback interface
-    let interface = match get_interface_name() {
-        Some(iface) => iface,
-        None => {
-            eprintln!("Could not find a suitable network interface.");
-            std::process::exit(1);
-        }
-    };
-
-    // find the device corresponding to the selected interface
+// start listening to tcp and respond to TCP handshake in the given interface
+pub fn start_tcp_listener(interface_name: &str) {
     let device = pcap::Device::list()
         .unwrap()
         .into_iter()
-        .find(|dev| dev.name == interface)
+        .find(|dev| dev.name == interface_name)
         .unwrap_or_else(|| {
-            eprintln!("Could not find device {}", interface);
+            eprintln!("Could not find device {}", interface_name);
             std::process::exit(1);
         });
 
-    // open the capture on the found device
     let mut cap = pcap::Capture::from_device(device)
         .unwrap()
-        .timeout(1000) // Timeout to avoid blocking indefinitely
+        .timeout(1000)
         .open()
         .unwrap();
 
     println!(
         "Listening for incoming TCP SYN packets on interface {}...",
-        interface
+        interface_name
     );
 
-    // capture packets in a loop
     while let Ok(packet) = cap.next_packet() {
-        // pass the captured packet to the handle_packet function
-        handle_packet(packet.data, &interface);
+        handle_packet(packet.data, interface_name);
+        println!("Packet captured");
     }
-}
-
-/// get the interface
-pub fn get_interface_name() -> Option<String> {
-    let interfaces = datalink::interfaces();
-    for iface in interfaces {
-        if !iface.is_loopback() {
-            return Some(iface.name.clone());
-        }
-    }
-    None
 }
 
 /// send the SYN/ACK packet
@@ -122,7 +95,7 @@ fn send_syn_ack(
 }
 
 /// handle incoming packets and respond with SYN/ACK
-pub fn handle_packet(packet: &[u8], interface: &str) {
+fn handle_packet(packet: &[u8], interface: &str) {
     if packet.len() < 54 {
         return; // packet too short to be valid TCP/IP
     }
