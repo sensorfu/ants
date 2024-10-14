@@ -1,23 +1,25 @@
 #![allow(dead_code)]
+
+use std::env;
 mod arp_listener;
 mod tcp_listener;
 mod virtual_interface;
 
-fn main() {
-    const INTERFACE_NAME: &str = "eth0";
-    const VIRTUAL_INTERFACE_NAME: &str = "macvlan0";
-    virtual_interface::remove_macvlan_interface(VIRTUAL_INTERFACE_NAME);
-    let (target_ip, sender_ip) = arp_listener::listen_arp(INTERFACE_NAME);
-    println!(
-        "Detected 2 unanswered ARP requests: target IP: {}, sender IP: {}",
-        target_ip, sender_ip
-    );
-    virtual_interface::create_macvlan_interface(
-        INTERFACE_NAME,
-        VIRTUAL_INTERFACE_NAME,
-        &target_ip.to_string(),
-    );
-    tcp_listener::start_tcp_listener(VIRTUAL_INTERFACE_NAME);
+fn parse_arguments() -> bool {
+    let args: Vec<String> = env::args().collect();
+    args.contains(&"--passive".to_string())
+}
 
-    virtual_interface::remove_macvlan_interface(VIRTUAL_INTERFACE_NAME);
+fn main() {
+    const INTERFACE_NAME: &str = "eth2";
+    virtual_interface::remove_macvlan_interface("v192.168.68.42");
+
+    let passive_mode = parse_arguments();
+
+    let virtual_interface_name =
+        arp_listener::listen_and_reply_unanswered_arps(INTERFACE_NAME, passive_mode);
+
+    //tcp_listener::start_tcp_listener(VIRTUAL_INTERFACE_NAME);
+
+    //virtual_interface::remove_macvlan_interface(&virtual_interface_name);
 }
