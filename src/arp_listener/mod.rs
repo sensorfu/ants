@@ -128,7 +128,7 @@ fn open_channel(interface_name: &str) -> DataLinkChannel {
         Err(e) => panic!("Error creating channel: {}", e),
     };
 
-    let mac_address = interface.mac.unwrap_or(MacAddr::default());
+    let mac_address = interface.mac.unwrap_or_default();
 
     DataLinkChannel {
         tx,
