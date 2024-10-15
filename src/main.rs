@@ -11,7 +11,7 @@ fn parse_arguments() -> bool {
 }
 
 fn main() {
-    const INTERFACE_NAME: &str = "eth2";
+    const INTERFACE_NAME: &str = "wlo1";
     virtual_interface::remove_macvlan_interface("v192.168.68.42");
 
     let passive_mode = parse_arguments();
