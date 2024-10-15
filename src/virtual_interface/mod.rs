@@ -65,8 +65,6 @@ fn run_command(command: &str, args: &[&str]) -> io::Result<()> {
             command,
             String::from_utf8_lossy(&output.stderr)
         );
-    } else {
-        println!("Command `{}` succeeded", command);
     }
 
     Ok(())

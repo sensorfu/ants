@@ -32,29 +32,30 @@ struct DataLinkChannel {
 
 /// Function to listen to ARP traffic and reply for unused IPs
 /// In passive mode doesn't answer to requests, but only logs where it would reply
-pub fn listen_and_reply_unanswered_arps(interface_name: &str, passive_mode: bool) -> String {
-    let arp_request_info = listen_arp(interface_name);
+pub fn listen_and_reply_unanswered_arps(interface_name: &str, arp_request_counts: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>, passive_mode: bool) -> String {
+    let arp_request_info = listen_arp(interface_name, arp_request_counts);
 
     let virtual_iface_name = format!("v{}", arp_request_info.target_ip);
     println!("Create virtual interface {}", virtual_iface_name);
+
     virtual_interface::create_macvlan_interface(
-        interface_name,
-        &virtual_iface_name,
-        &arp_request_info.target_ip.to_string(),
+    interface_name,
+    &virtual_iface_name,
+    &arp_request_info.target_ip.to_string(),
     );
+   
 
     send_arp_reply(&virtual_iface_name, &arp_request_info, passive_mode);
 
     virtual_iface_name
 }
 
-fn listen_arp(interface_name: &str) -> ArpInfo {
+fn listen_arp(interface_name: &str, arp_request_counts: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>) -> ArpInfo {
     let mut channel = open_channel(interface_name);
 
     println!("Listening for ARP requests on {}", interface_name);
 
     // A map to track ARP request counts for each target IP address
-    let mut arp_request_count: HashMap<(IpAddr, IpAddr), (u32, Instant)> = HashMap::new();
     let request_threshold: u32 = 2;
     let request_timeout = Duration::from_secs(5);
 
@@ -64,7 +65,7 @@ fn listen_arp(interface_name: &str) -> ArpInfo {
                 let ethernet_packet = EthernetPacket::new(packet).unwrap();
                 if let Some(arp_packet) = process_arp_packet(
                     &ethernet_packet,
-                    &mut arp_request_count,
+                    arp_request_counts,
                     request_threshold,
                     request_timeout,
                 ) {
@@ -187,6 +188,7 @@ fn track_arp_request(
             "Detected {} unanswered ARP requests for {}",
             request_threshold, target_ip
         );
+        arp_request_count.remove(&(IpAddr::V4(target_ip), IpAddr::V4(sender_ip)));
 
         return true;
     }
@@ -220,7 +222,7 @@ fn process_arp_packet<'a>(
             }
             ArpOperations::Reply => {
                 println!("ARP Reply: {} is at {:?}", sender_ip, sender_hw);
-                arp_request_count.remove(&(IpAddr::V4(sender_ip), IpAddr::V4(target_ip)));
+                arp_request_count.remove(&(IpAddr::V4(target_ip), IpAddr::V4(sender_ip)));
             }
             _ => {}
         }
