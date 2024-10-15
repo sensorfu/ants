@@ -54,7 +54,7 @@ fn listen_arp(interface_name: &str) -> ArpInfo {
     println!("Listening for ARP requests on {}", interface_name);
 
     // A map to track ARP request counts for each target IP address
-    let mut arp_request_count: HashMap<IpAddr, (u32, Instant, IpAddr)> = HashMap::new();
+    let mut arp_request_count: HashMap<(IpAddr, IpAddr), (u32, Instant)> = HashMap::new();
     let request_threshold: u32 = 2;
     let request_timeout = Duration::from_secs(5);
 
@@ -163,7 +163,7 @@ fn create_arp_packet(ethernet_packet: &mut MutableEthernetPacket, arp_reply_info
 
 fn track_arp_request(
     arp_packet: &ArpPacket,
-    arp_request_count: &mut HashMap<IpAddr, (u32, Instant, IpAddr)>,
+    arp_request_count: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>,
     request_threshold: u32,
     request_timeout: Duration,
 ) -> bool {
@@ -172,8 +172,8 @@ fn track_arp_request(
     let now = Instant::now();
     let entry =
         arp_request_count
-            .entry(IpAddr::V4(target_ip))
-            .or_insert((0, now, IpAddr::V4(sender_ip)));
+            .entry((IpAddr::V4(target_ip), IpAddr::V4(sender_ip)))
+            .or_insert((0, now));
 
     if now.duration_since(entry.1) > request_timeout {
         entry.0 = 0;
@@ -195,7 +195,7 @@ fn track_arp_request(
 
 fn process_arp_packet<'a>(
     ethernet_packet: &'a EthernetPacket<'a>,
-    arp_request_count: &'a mut HashMap<IpAddr, (u32, Instant, IpAddr)>,
+    arp_request_count: &'a mut HashMap<(IpAddr, IpAddr), (u32, Instant)>,
     request_threshold: u32,
     request_timeout: Duration,
 ) -> Option<ArpPacket<'a>> {
@@ -220,7 +220,7 @@ fn process_arp_packet<'a>(
             }
             ArpOperations::Reply => {
                 println!("ARP Reply: {} is at {:?}", sender_ip, sender_hw);
-                arp_request_count.remove(&IpAddr::V4(sender_ip));
+                arp_request_count.remove(&(IpAddr::V4(sender_ip), IpAddr::V4(target_ip)));
             }
             _ => {}
         }
