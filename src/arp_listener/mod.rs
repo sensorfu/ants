@@ -43,10 +43,11 @@ pub fn listen_and_reply_unanswered_arps(
     println!("Create virtual interface {}", virtual_iface_name);
 
     virtual_interface::create_macvlan_interface(
-        interface_name,
-        &virtual_iface_name,
-        &arp_request_info.target_ip.to_string(),
+    interface_name,
+    &virtual_iface_name,
+    &arp_request_info.target_ip.to_string(),
     );
+   
 
     send_arp_reply(&virtual_iface_name, &arp_request_info, passive_mode);
 
