@@ -1,6 +1,6 @@
 use std::{collections::HashMap, net::IpAddr, time::Instant};
 
-use crate::{arp_listener};
+use crate::arp_listener;
 
 pub fn start_tarpitting(passive_mode: bool) {
     const INTERFACE_NAME: &str = "eth0";
