@@ -32,25 +32,31 @@ struct DataLinkChannel {
 
 /// Function to listen to ARP traffic and reply for unused IPs
 /// In passive mode doesn't answer to requests, but only logs where it would reply
-pub fn listen_and_reply_unanswered_arps(interface_name: &str, arp_request_counts: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>, passive_mode: bool) -> String {
+pub fn listen_and_reply_unanswered_arps(
+    interface_name: &str,
+    arp_request_counts: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>,
+    passive_mode: bool,
+) -> String {
     let arp_request_info = listen_arp(interface_name, arp_request_counts);
 
     let virtual_iface_name = format!("v{}", arp_request_info.target_ip);
     println!("Create virtual interface {}", virtual_iface_name);
 
     virtual_interface::create_macvlan_interface(
-    interface_name,
-    &virtual_iface_name,
-    &arp_request_info.target_ip.to_string(),
+        interface_name,
+        &virtual_iface_name,
+        &arp_request_info.target_ip.to_string(),
     );
-   
 
     send_arp_reply(&virtual_iface_name, &arp_request_info, passive_mode);
 
     virtual_iface_name
 }
 
-fn listen_arp(interface_name: &str, arp_request_counts: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>) -> ArpInfo {
+fn listen_arp(
+    interface_name: &str,
+    arp_request_counts: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>,
+) -> ArpInfo {
     let mut channel = open_channel(interface_name);
 
     println!("Listening for ARP requests on {}", interface_name);
@@ -171,10 +177,9 @@ fn track_arp_request(
     let target_ip = arp_packet.get_target_proto_addr();
     let sender_ip = arp_packet.get_sender_proto_addr();
     let now = Instant::now();
-    let entry =
-        arp_request_count
-            .entry((IpAddr::V4(target_ip), IpAddr::V4(sender_ip)))
-            .or_insert((0, now));
+    let entry = arp_request_count
+        .entry((IpAddr::V4(target_ip), IpAddr::V4(sender_ip)))
+        .or_insert((0, now));
 
     if now.duration_since(entry.1) > request_timeout {
         entry.0 = 0;
