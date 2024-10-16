@@ -1,6 +1,6 @@
 use std::{collections::HashMap, net::IpAddr, time::Instant};
 
-use crate::{arp_listener, virtual_interface};
+use crate::{arp_listener};
 
 pub fn start_tarpitting(passive_mode: bool) {
     const INTERFACE_NAME: &str = "eth0";
@@ -11,7 +11,7 @@ pub fn start_tarpitting(passive_mode: bool) {
 
     loop {
         //println!("{:?}", arp_request_counts);
-        let virtual_interface_name = arp_listener::listen_and_reply_unanswered_arps(
+        let _virtual_interface_name = arp_listener::listen_and_reply_unanswered_arps(
             INTERFACE_NAME,
             &mut arp_request_counts,
             passive_mode,
