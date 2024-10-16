@@ -5,7 +5,8 @@ use crate::{virtual_interface, arp_listener};
 
 pub fn start_tarpitting(passive_mode: bool) {
     const INTERFACE_NAME: &str = "eth0";
-    virtual_interface::remove_macvlan_interface("v192.168.68.42");
+    
+    //virtual_interface::remove_macvlan_interface("v192.168.68.42");
 
     let mut arp_request_counts: HashMap<(IpAddr, IpAddr), (u32, Instant)> = HashMap::new();
 
