@@ -3,6 +3,7 @@
 mod arp_listener;
 mod tarpitter;
 mod tcp_listener;
+mod virtual_interface;
 
 use std::env;
 
