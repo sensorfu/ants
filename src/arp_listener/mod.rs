@@ -202,10 +202,15 @@ fn process_arp_packet<'a>(
     request_timeout: Duration,
 ) -> Option<ArpPacket<'a>> {
     if let Some(arp_packet) = ArpPacket::new(ethernet_packet.payload()) {
+        //Discard invalid packets
+        if arp_packet.get_hardware_type() != pnet_packet::arp::ArpHardwareType(1) {
+            return None;
+        }
         let target_ip = arp_packet.get_target_proto_addr();
         let sender_ip = arp_packet.get_sender_proto_addr();
         let sender_hw = arp_packet.get_sender_hw_addr();
 
+        //println!("{:?}", arp_packet);
         match arp_packet.get_operation() {
             ArpOperations::Request => {
                 println!("ARP Request: {} is asking for {}", sender_ip, target_ip);
