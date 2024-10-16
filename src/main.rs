@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-mod tarpitter;
-mod virtual_interface;
 mod arp_listener;
+mod tarpitter;
 mod tcp_listener;
+mod virtual_interface;
 
 use std::env;
 
@@ -13,8 +13,6 @@ fn parse_arguments() -> bool {
 }
 
 fn main() {
-
-
     let passive_mode = parse_arguments();
 
     tarpitter::start_tarpitting(passive_mode);
