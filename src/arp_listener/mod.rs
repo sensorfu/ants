@@ -36,25 +36,21 @@ pub fn listen_and_reply_unanswered_arps(
     interface_name: &str,
     arp_request_counts: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>,
     passive_mode: bool,
-) -> (String, Ipv4Addr) {
+) -> String {
     let arp_request_info = listen_arp(interface_name, arp_request_counts);
-    send_arp_reply(interface_name, &arp_request_info, passive_mode);
 
     let virtual_iface_name = format!("v{}", arp_request_info.target_ip);
     println!("Create virtual interface {}", virtual_iface_name);
 
-    let start = Instant::now();
     virtual_interface::create_macvlan_interface(
         interface_name,
         &virtual_iface_name,
         &arp_request_info.target_ip.to_string(),
     );
-    let duration: Duration = start.elapsed();
-    println!("Time taken to create interface: {:?}", duration);
 
-    //send_arp_reply(&virtual_iface_name, &arp_request_info, passive_mode);
+    send_arp_reply(&virtual_iface_name, &arp_request_info, passive_mode);
 
-    (virtual_iface_name, arp_request_info.target_ip)
+    virtual_iface_name
 }
 
 fn listen_arp(
@@ -73,7 +69,6 @@ fn listen_arp(
         match channel.rx.next() {
             Ok(packet) => {
                 let ethernet_packet = EthernetPacket::new(packet).unwrap();
-                let start = Instant::now();
                 if let Some(arp_packet) = process_arp_packet(
                     &ethernet_packet,
                     arp_request_counts,
@@ -84,8 +79,7 @@ fn listen_arp(
                     let target_ip: Ipv4Addr = arp_packet.get_target_proto_addr();
                     let sender_mac: MacAddr = arp_packet.get_sender_hw_addr();
                     let target_mac: MacAddr = arp_packet.get_target_hw_addr();
-                    let duration: Duration = start.elapsed();
-                    println!("Time taken to process: {:?}", duration);
+
                     return ArpInfo {
                         sender_ip,
                         target_ip,
@@ -108,7 +102,7 @@ fn send_arp_reply(interface_name: &str, arp_request_info: &ArpInfo, passive_mode
         sender_ip: arp_request_info.target_ip,
         target_ip: arp_request_info.target_ip,
         sender_mac: channel.mac_address,
-        target_mac: arp_request_info.sender_mac,
+        target_mac: channel.mac_address,
     };
 
     let mut ethernet_buffer = [0u8; 42]; // 14 bytes for Ethernet + 28 bytes for ARP
