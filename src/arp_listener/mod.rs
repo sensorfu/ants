@@ -36,21 +36,25 @@ pub fn listen_and_reply_unanswered_arps(
     interface_name: &str,
     arp_request_counts: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>,
     passive_mode: bool,
-) -> String {
+) -> (String, Ipv4Addr) {
     let arp_request_info = listen_arp(interface_name, arp_request_counts);
+    send_arp_reply(interface_name, &arp_request_info, passive_mode);
 
     let virtual_iface_name = format!("v{}", arp_request_info.target_ip);
     println!("Create virtual interface {}", virtual_iface_name);
-
+    
+    let start = Instant::now();
     virtual_interface::create_macvlan_interface(
         interface_name,
         &virtual_iface_name,
         &arp_request_info.target_ip.to_string(),
     );
+    let duration: Duration = start.elapsed();
+    println!("Time taken to create interface: {:?}", duration);
 
-    send_arp_reply(&virtual_iface_name, &arp_request_info, passive_mode);
+    //send_arp_reply(&virtual_iface_name, &arp_request_info, passive_mode);
 
-    virtual_iface_name
+    (virtual_iface_name, arp_request_info.target_ip)
 }
 
 fn listen_arp(
@@ -69,6 +73,7 @@ fn listen_arp(
         match channel.rx.next() {
             Ok(packet) => {
                 let ethernet_packet = EthernetPacket::new(packet).unwrap();
+                let start = Instant::now();
                 if let Some(arp_packet) = process_arp_packet(
                     &ethernet_packet,
                     arp_request_counts,
@@ -79,7 +84,8 @@ fn listen_arp(
                     let target_ip: Ipv4Addr = arp_packet.get_target_proto_addr();
                     let sender_mac: MacAddr = arp_packet.get_sender_hw_addr();
                     let target_mac: MacAddr = arp_packet.get_target_hw_addr();
-
+                    let duration: Duration = start.elapsed();
+                    println!("Time taken to process: {:?}", duration);
                     return ArpInfo {
                         sender_ip,
                         target_ip,
