@@ -1,0 +1,23 @@
+ersion: '3'
+services:
+  scanner:
+    image: my_nmap
+    container_name: scanner2
+    networks:
+      - my_custom_bridge
+    command: ["nmap", "-sP", "172.19.0.0/16"]
+
+  listener:
+    image: ants1
+    container_name: ants2
+    networks:
+      my_custom_bridge:
+        ipv4_address: 172.19.0.2
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: always
+
+networks:
+  my_custom_bridge:
+    external: true
