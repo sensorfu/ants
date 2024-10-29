@@ -42,7 +42,7 @@ pub fn listen_and_reply_unanswered_arps(
 
     let virtual_iface_name = format!("v{}", arp_request_info.target_ip);
     println!("Create virtual interface {}", virtual_iface_name);
-    
+
     let start = Instant::now();
     virtual_interface::create_macvlan_interface(
         interface_name,
