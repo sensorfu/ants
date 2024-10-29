@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 mod arp_listener;
 mod tarpitter;
 mod tcp_listener;

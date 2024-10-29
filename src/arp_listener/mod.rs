@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 extern crate pnet_base;
 extern crate pnet_datalink;
 extern crate pnet_packet;
