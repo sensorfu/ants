@@ -5,8 +5,6 @@ mod virtual_interface;
 
 use std::env;
 
-use std::env;
-
 fn parse_arguments() -> bool {
     let args: Vec<String> = env::args().collect();
     args.contains(&"--passive".to_string())
