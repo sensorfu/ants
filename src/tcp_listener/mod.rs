@@ -16,7 +16,7 @@ pub fn start_tcp_tarpitting(interface_name: &str, virtual_ip: Ipv4Addr, passive_
     let device = pcap::Device::list()?
         .into_iter()
         .find(|dev| dev.name == interface_name)
-        .ok_or_else(|| format!("Could not find device {}", interface_name))?;
+        .ok_or( format!("Could not find device {}", interface_name))?;
 
     let mut cap = pcap::Capture::from_device(device)?
         .immediate_mode(true)
@@ -65,21 +65,21 @@ fn send_syn_ack(
         let interface = datalink::interfaces()
             .into_iter()
             .find(|iface| iface.name == interface_name)
-            .ok_or_else(|| "Could not find the specified interface")?;
+            .ok_or("Could not find the specified interface")?;
 
         let mut eth_buffer = [0u8; 60]; // Ethernet header + IP + TCP
 
         let mut ethernet_packet = MutableEthernetPacket::new(&mut eth_buffer[..])
-            .ok_or_else(|| "Failed to create Ethernet packet")?;
+            .ok_or("Failed to create Ethernet packet")?;
         ethernet_packet.set_source(interface.mac
-            .ok_or_else(|| "Interface has no MAC address")?);
+            .ok_or("Interface has no MAC address")?);
         ethernet_packet.set_destination(dst_mac);
         ethernet_packet.set_ethertype(pnet::packet::ethernet::EtherType(0x0800));
 
     {
         let ipv4_buffer = &mut eth_buffer[14..34];
         let mut ipv4_packet = MutableIpv4Packet::new(ipv4_buffer)
-            .ok_or_else(|| "Failed to create IPv4 packet")?;
+            .ok_or("Failed to create IPv4 packet")?;
 
         ipv4_packet.set_version(4);
         ipv4_packet.set_header_length(5);
@@ -93,7 +93,7 @@ fn send_syn_ack(
     {
         let tcp_buffer = &mut eth_buffer[34..54];
         let mut tcp_packet = MutableTcpPacket::new(tcp_buffer)
-            .ok_or_else(|| "Failed to create TCP packet")?;
+            .ok_or("Failed to create TCP packet")?;
 
         tcp_packet.set_sequence(1);
         tcp_packet.set_acknowledgement(received_seq_num + 1);
