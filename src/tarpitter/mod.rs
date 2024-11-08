@@ -14,7 +14,7 @@ pub fn start_tarpitting(passive_mode: bool) {
             passive_mode,
         );
 
-        tcp_listener::start_tcp_tarpitting(INTERFACE_NAME, ip_address, passive_mode);
+        let _ = tcp_listener::start_tcp_tarpitting(INTERFACE_NAME, ip_address, passive_mode);
 
         virtual_interface::remove_macvlan_interface(&virtual_interface_name);
     }

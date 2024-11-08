@@ -6,26 +6,22 @@ use pnet::packet::Packet;
 use pnet::util::checksum;
 use pnet_base::MacAddr;
 use pnet_packet::ethernet::MutableEthernetPacket;
+use std::error::Error;
 use std::net::Ipv4Addr;
 use std::thread;
 use std::time::{Duration, Instant};
 
 // start listening to tcp and respond to TCP handshakes in the given interface
-pub fn start_tcp_tarpitting(interface_name: &str, virtual_ip: Ipv4Addr, passive_mode: bool) {
-    let device = pcap::Device::list()
-        .unwrap()
+pub fn start_tcp_tarpitting(interface_name: &str, virtual_ip: Ipv4Addr, passive_mode: bool) -> Result<(), Box<dyn Error>> {
+    let device = pcap::Device::list()?
         .into_iter()
         .find(|dev| dev.name == interface_name)
-        .unwrap_or_else(|| {
-            eprintln!("Could not find device {}", interface_name);
-            std::process::exit(1);
-        });
+        .ok_or_else(|| format!("Could not find device {}", interface_name))?;
 
-    let mut cap = pcap::Capture::from_device(device)
-        .unwrap()
+    let mut cap = pcap::Capture::from_device(device)?
         .immediate_mode(true)
-        .open()
-        .unwrap();
+        .open()?;
+
 
     println!(
         "Listening for incoming TCP SYN packets on interface {}...",
@@ -35,12 +31,17 @@ pub fn start_tcp_tarpitting(interface_name: &str, virtual_ip: Ipv4Addr, passive_
     let timeout_duration = Duration::new(10, 0);
     let mut last_response_time = Instant::now();
 
-    while let Ok(packet) = cap.next_packet() {
-        let response_sent = handle_packet(packet.data, interface_name, virtual_ip, passive_mode);
-
-        if response_sent {
-            last_response_time = Instant::now()
+while let Ok(packet) = cap.next_packet() {
+    match handle_packet(packet.data, interface_name, virtual_ip, passive_mode) {
+        Ok(response_sent) => {
+            if response_sent {
+                last_response_time = Instant::now();
+            }
         }
+        Err(e) => {
+            eprintln!("Error handling packet: {}", e);
+        }
+    }
 
         if last_response_time.elapsed() >= timeout_duration {
             println!("No response sent in the last 10 seconds, exiting tcp_listener.");
@@ -48,6 +49,8 @@ pub fn start_tcp_tarpitting(interface_name: &str, virtual_ip: Ipv4Addr, passive_
         }
         thread::sleep(Duration::from_millis(300));
     }
+
+    Ok(())
 }
 
 fn send_syn_ack(
@@ -58,22 +61,25 @@ fn send_syn_ack(
     src_port: u16,
     dst_port: u16,
     received_seq_num: u32,
-) {
-    let interface = datalink::interfaces()
-        .into_iter()
-        .find(|iface| iface.name == interface_name)
-        .expect("Could not find the specified interface");
+) -> Result<(), Box<dyn Error>> {
+        let interface = datalink::interfaces()
+            .into_iter()
+            .find(|iface| iface.name == interface_name)
+            .ok_or_else(|| "Could not find the specified interface")?;
 
-    let mut eth_buffer = [0u8; 60]; // Ethernet header + IP + TCP
+        let mut eth_buffer = [0u8; 60]; // Ethernet header + IP + TCP
 
-    let mut ethernet_packet = MutableEthernetPacket::new(&mut eth_buffer[..]).unwrap();
-    ethernet_packet.set_source(interface.mac.unwrap());
-    ethernet_packet.set_destination(dst_mac);
-    ethernet_packet.set_ethertype(pnet::packet::ethernet::EtherType(0x0800));
+        let mut ethernet_packet = MutableEthernetPacket::new(&mut eth_buffer[..])
+            .ok_or_else(|| "Failed to create Ethernet packet")?;
+        ethernet_packet.set_source(interface.mac
+            .ok_or_else(|| "Interface has no MAC address")?);
+        ethernet_packet.set_destination(dst_mac);
+        ethernet_packet.set_ethertype(pnet::packet::ethernet::EtherType(0x0800));
 
     {
         let ipv4_buffer = &mut eth_buffer[14..34];
-        let mut ipv4_packet = MutableIpv4Packet::new(ipv4_buffer).unwrap();
+        let mut ipv4_packet = MutableIpv4Packet::new(ipv4_buffer)
+            .ok_or_else(|| "Failed to create IPv4 packet")?;
 
         ipv4_packet.set_version(4);
         ipv4_packet.set_header_length(5);
@@ -86,7 +92,8 @@ fn send_syn_ack(
 
     {
         let tcp_buffer = &mut eth_buffer[34..54];
-        let mut tcp_packet = MutableTcpPacket::new(tcp_buffer).unwrap();
+        let mut tcp_packet = MutableTcpPacket::new(tcp_buffer)
+            .ok_or_else(|| "Failed to create TCP packet")?;
 
         tcp_packet.set_sequence(1);
         tcp_packet.set_acknowledgement(received_seq_num + 1);
@@ -102,31 +109,35 @@ fn send_syn_ack(
         tcp_packet.set_checksum(tcp_checksum);
     }
 
-    match datalink::channel(&interface, Default::default()) {
-        Ok(Ethernet(mut tx, _)) => {
-            let _ = tx.send_to(&eth_buffer, None).unwrap();
-            println!("Sent SYN/ACK packet");
+    match datalink::channel(&interface, Default::default())? {
+        Ethernet(mut tx, _) => {
+            match tx.send_to(&eth_buffer, None) {
+                Some(Ok(())) => println!("Sent SYN/ACK packet"),
+                Some(Err(e)) => eprintln!("Failed to send packet: {}", e),
+                None => eprintln!("Failed to send packet: No channel available"),
+            }
+            Ok(())
         }
-        Ok(_) => panic!("Unhandled channel type"),
-        Err(e) => panic!("Failed to send packet: {}", e),
+        _ => Err("Unhandled channel type".into()),
     }
 }
 
-fn handle_packet(packet: &[u8], interface: &str, virtual_ip: Ipv4Addr, passive_mode: bool) -> bool {
+
+fn handle_packet(packet: &[u8], interface: &str, virtual_ip: Ipv4Addr, passive_mode: bool) -> Result<bool, Box<dyn Error>> {
     if packet.len() < 54 {
-        return false;
+        return Ok(false);
     }
 
     let ethertype = u16::from_be_bytes([packet[12], packet[13]]);
 
     if ethertype != 0x0800 {
-        return false;
+        return Ok(false);
     }
 
     let src_ip = Ipv4Addr::new(packet[26], packet[27], packet[28], packet[29]);
     let dst_ip = Ipv4Addr::new(packet[30], packet[31], packet[32], packet[33]);
     if dst_ip != virtual_ip {
-        return false;
+        return Ok(false);
     }
 
     let src_mac = MacAddr::new(
@@ -154,11 +165,11 @@ fn handle_packet(packet: &[u8], interface: &str, virtual_ip: Ipv4Addr, passive_m
                 dst_port,
                 src_port,
                 received_seq_num,
-            );
+            )?;
         }
 
-        return true;
+        return Ok(true);
     }
 
-    false
+    Ok(false)
 }
