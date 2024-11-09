@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 extern crate pnet_base;
 extern crate pnet_datalink;
 extern crate pnet_packet;
@@ -36,8 +35,9 @@ pub fn listen_and_reply_unanswered_arps(
     interface_name: &str,
     arp_request_counts: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>,
     passive_mode: bool,
-) -> String {
+) -> (String, Ipv4Addr) {
     let arp_request_info = listen_arp(interface_name, arp_request_counts);
+    send_arp_reply(interface_name, &arp_request_info, passive_mode);
 
     let virtual_iface_name = format!("v{}", arp_request_info.target_ip);
     println!("Create virtual interface {}", virtual_iface_name);
@@ -48,9 +48,7 @@ pub fn listen_and_reply_unanswered_arps(
         &arp_request_info.target_ip.to_string(),
     );
 
-    send_arp_reply(&virtual_iface_name, &arp_request_info, passive_mode);
-
-    virtual_iface_name
+    (virtual_iface_name, arp_request_info.target_ip)
 }
 
 fn listen_arp(
@@ -79,7 +77,6 @@ fn listen_arp(
                     let target_ip: Ipv4Addr = arp_packet.get_target_proto_addr();
                     let sender_mac: MacAddr = arp_packet.get_sender_hw_addr();
                     let target_mac: MacAddr = arp_packet.get_target_hw_addr();
-
                     return ArpInfo {
                         sender_ip,
                         target_ip,
