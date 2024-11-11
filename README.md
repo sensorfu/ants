@@ -7,7 +7,7 @@ https://www.cmand.org/papers/degreaser-acsac14.pdf
 First create docker images of ants and nmap scanner
 
 ```console
-docker build -f ants.dockerfile -t ants1 . && docker build -f nmap.dockerfile -t my_nmap .
+docker build -f ants.Dockerfile -t ants1 . && docker build -f my_nmap.Dockerfile -t my_nmap .
 ```
 
 Then create a testnetwork
