@@ -5,14 +5,13 @@ services:
     container_name: listener
     networks:
       my_custom_bridge:
-        ipv4_address: 172.19.0.2
     cap_add:
       - NET_ADMIN
       - NET_RAW
     restart: always
     expose:
-      - "0"  
-
+      - "1-60000"
+   
   scanner:
     image: my_nmap  
     container_name: scanner
@@ -25,8 +24,7 @@ services:
       - NET_ADMIN
       - NET_RAW
     expose:
-      - "0"  
-
+      - "1-60000"
 networks:
   my_custom_bridge:
     external: true

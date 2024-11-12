@@ -13,6 +13,7 @@ RUN cargo build
 
 RUN ls -la ./target/debug/
 
+EXPOSE 8080
 
 CMD ["sh", "-c", "RUST_BACKTRACE=full ./target/debug/ants"]
 
