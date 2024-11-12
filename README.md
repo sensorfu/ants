@@ -22,3 +22,9 @@ Lastly compose and run containers
 docker-compose up
 ```
 
+
+When finished need to docker-compose down
+
+```console
+docker-compose down
+```
