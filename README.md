@@ -22,6 +22,13 @@ Lastly compose and run containers
 docker-compose up
 ```
 
+After docker compose up open new terminal for interactive use of nmap
+
+```console
+docker exec -it scanner bash
+```
+
+
 
 When finished need to docker-compose down
 
