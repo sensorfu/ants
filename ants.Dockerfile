@@ -1,15 +1,19 @@
- Use the official Rust image# Use the official Rust image
-FROM rust:latestFROM rust:latest
+FROM rust:latest
 
-WORKDIR /usr/src/hello_world
+WORKDIR /usr/src/ants
 
 COPY . .
 
-RUN apt-get update && \ apt-get install -y gcc libpcap-dev iproute2 && \ rm -rf /var/lib/apt/lists/* apt-get install -y gcc libpcap-dev iproute2 && \ rm -rf /var/lib/apt/lists/*# Build the application RUN cargo build --release
-RUN cargo build --releaseRUN ls -la ./target/release/
+RUN apt-get update && \
+    apt-get install -y gcc libpcap-dev iproute2 && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN ls -la ./target/release/
-EXPOSE 8080
-CMD ["sh", "-c", "RUST_BACKTRACE=full ./target/release/ants"]
+
+RUN cargo build
+
+RUN ls -la ./target/debug/
+
+
+CMD ["sh", "-c", "RUST_BACKTRACE=full ./target/debug/ants"]
 
 

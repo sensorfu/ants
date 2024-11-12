@@ -1,7 +1,5 @@
-FROM alpine:latest
+FROM ubuntu:latest
 
-RUN apk update && apk add --no-cache nmap
+RUN apt-get update && apt-get install -y nmap
 
-CMD ["nmap", "--help"]
-
-
+CMD ["bash"]

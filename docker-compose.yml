@@ -1,15 +1,8 @@
-ersion: '3'
+version: '3'
 services:
-  scanner:
-    image: my_nmap
-    container_name: scanner2
-    networks:
-      - my_custom_bridge
-    command: ["nmap", "-sP", "172.19.0.0/16"]
-
   listener:
-    image: ants1
-    container_name: ants2
+    image: ants1  
+    container_name: listener
     networks:
       my_custom_bridge:
         ipv4_address: 172.19.0.2
@@ -17,6 +10,22 @@ services:
       - NET_ADMIN
       - NET_RAW
     restart: always
+    expose:
+      - "0"  
+
+  scanner:
+    image: my_nmap  
+    container_name: scanner
+    networks:
+      my_custom_bridge:
+    stdin_open: true
+    tty: true
+    command: ["sleep", "infinity"]  
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    expose:
+      - "0"  
 
 networks:
   my_custom_bridge:
