@@ -12,9 +12,13 @@ use pnet_packet::Packet;
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::{Duration, Instant};
+use tokio::task;
+use tokio::sync::Mutex;
+use std::sync::Arc;
+use tokio;
 
 use crate::virtual_interface;
-
+#[derive(Debug)]
 struct ArpInfo {
     sender_ip: Ipv4Addr,
     target_ip: Ipv4Addr,
@@ -31,29 +35,43 @@ struct DataLinkChannel {
 
 /// Function to listen to ARP traffic and reply for unused IPs
 /// In passive mode doesn't answer to requests, but only logs where it would reply
-pub fn listen_and_reply_unanswered_arps(
+pub async fn listen_and_reply_unanswered_arps(
     interface_name: &str,
-    arp_request_counts: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>,
+    arp_request_counts: Arc<Mutex<HashMap<(IpAddr, IpAddr), (u32, Instant)>>>,
     passive_mode: bool,
 ) -> (String, Ipv4Addr) {
-    let arp_request_info = listen_arp(interface_name, arp_request_counts);
-    send_arp_reply(interface_name, &arp_request_info, passive_mode);
 
+    let listen_task = task::spawn(listen_arp(interface_name, arp_request_counts.clone()));
+
+  
+    let arp_request_info = listen_task.await.unwrap();
+
+  
     let virtual_iface_name = format!("v{}", arp_request_info.target_ip);
-    println!("Create virtual interface {}", virtual_iface_name);
+    
+    
+    send_arp_reply(interface_name, &arp_request_info, passive_mode).await;
 
-    virtual_interface::create_macvlan_interface(
-        interface_name,
-        &virtual_iface_name,
-        &arp_request_info.target_ip.to_string(),
-    );
+   
+    let create_virtual_iface_task = task::spawn(async move {
+        virtual_interface::create_macvlan_interface(
+            interface_name,
+            &virtual_iface_name,
+            &arp_request_info.target_ip.to_string(),
+        );
+    });
+
+    // Wait for the virtual interface creation task to complete.
+    create_virtual_iface_task.await.unwrap();
+
+    println!("Created virtual interface: {}", virtual_iface_name);
 
     (virtual_iface_name, arp_request_info.target_ip)
 }
 
-fn listen_arp(
+async fn listen_arp(
     interface_name: &str,
-    arp_request_counts: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>,
+    arp_request_counts: Arc<Mutex<HashMap<(IpAddr, IpAddr), (u32, Instant)>>>
 ) -> ArpInfo {
     let mut channel = open_channel(interface_name);
 
@@ -67,9 +85,10 @@ fn listen_arp(
         match channel.rx.next() {
             Ok(packet) => {
                 let ethernet_packet = EthernetPacket::new(packet).unwrap();
+                let mut arp_request_counts = arp_request_counts.lock().await;
                 if let Some(arp_packet) = process_arp_packet(
                     &ethernet_packet,
-                    arp_request_counts,
+                    &mut *arp_request_counts,
                     request_threshold,
                     request_timeout,
                 ) {
@@ -92,7 +111,7 @@ fn listen_arp(
     }
 }
 
-fn send_arp_reply(interface_name: &str, arp_request_info: &ArpInfo, passive_mode: bool) {
+async fn send_arp_reply(interface_name: &str, arp_request_info: &ArpInfo, passive_mode: bool) {
     let mut channel = open_channel(interface_name);
 
     let arp_reply_info = ArpInfo {
