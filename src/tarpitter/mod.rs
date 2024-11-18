@@ -14,7 +14,13 @@ pub fn start_tarpitting(passive_mode: bool) {
             passive_mode,
         );
 
-        tcp_listener::start_tcp_tarpitting(INTERFACE_NAME, ip_address, passive_mode);
+        if let Err(e) = std::thread::spawn(move || {
+            tcp_listener::start_tcp_tarpitting(INTERFACE_NAME, ip_address, passive_mode);
+        })
+        .join()
+        {
+            eprintln!("Error in TCP tarpitting: {:?}", e);
+        }
 
         virtual_interface::remove_macvlan_interface(&virtual_interface_name);
     }
