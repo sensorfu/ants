@@ -10,8 +10,10 @@ fn parse_arguments() -> bool {
     args.contains(&"--passive".to_string())
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let passive_mode = parse_arguments();
 
-    tarpitter::start_tarpitting(passive_mode);
+    tarpitter::start_tarpitting(passive_mode)?;
+
+    Ok(())
 }
