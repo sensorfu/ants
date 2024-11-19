@@ -46,7 +46,6 @@ pub fn start_tcp_tarpitting(interface_name: &str, virtual_ip: Ipv4Addr, passive_
             println!("No response sent in the last 10 seconds, exiting tcp_listener.");
             break;
         }
-        thread::sleep(Duration::from_millis(300));
     }
 }
 
@@ -146,6 +145,7 @@ fn handle_packet(packet: &[u8], interface: &str, virtual_ip: Ipv4Addr, passive_m
         );
 
         if !passive_mode {
+            thread::sleep(Duration::from_millis(600));
             send_syn_ack(
                 interface,
                 src_mac,

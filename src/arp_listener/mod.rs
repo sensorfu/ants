@@ -11,9 +11,9 @@ use pnet_packet::MutablePacket;
 use pnet_packet::Packet;
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
+use std::sync::mpsc;
+use std::thread;
 use std::time::{Duration, Instant};
-
-use crate::virtual_interface;
 
 struct ArpInfo {
     sender_ip: Ipv4Addr,
@@ -29,35 +29,35 @@ struct DataLinkChannel {
     mac_address: MacAddr,
 }
 
-/// Function to listen to ARP traffic and reply for unused IPs
-/// In passive mode doesn't answer to requests, but only logs where it would reply
-pub fn listen_and_reply_unanswered_arps(
-    interface_name: &str,
-    arp_request_counts: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>,
-    passive_mode: bool,
-) -> (String, Ipv4Addr) {
-    let arp_request_info = listen_arp(interface_name, arp_request_counts);
-    send_arp_reply(interface_name, &arp_request_info, passive_mode);
+/// Creates thread to handle arp requests and replies
+/// returns IPs which need to be tarpitted with mpsc channel
+pub fn start_arp_handling(interface_name: &str, passive_mode: bool) -> mpsc::Receiver<Ipv4Addr> {
+    let (tx, rx) = mpsc::channel();
 
-    let virtual_iface_name = format!("v{}", arp_request_info.target_ip);
-    println!("Create virtual interface {}", virtual_iface_name);
+    let interface_name = interface_name.to_string();
 
-    virtual_interface::create_macvlan_interface(
-        interface_name,
-        &virtual_iface_name,
-        &arp_request_info.target_ip.to_string(),
-    );
+    thread::spawn(move || {
+        let mut arp_request_counts: HashMap<(IpAddr, IpAddr), (u32, Instant)> = HashMap::new();
+        let mut channel = open_channel(interface_name);
+        loop {
+            let arp_request_info = listen_arp(&mut arp_request_counts, &mut channel);
+            send_arp_reply(&arp_request_info, passive_mode, &mut channel);
 
-    (virtual_iface_name, arp_request_info.target_ip)
+            if tx.send(arp_request_info.target_ip).is_err() {
+                println!("Receiver dropped, exiting ARP handling thread.");
+                break;
+            }
+        }
+    });
+
+    rx
 }
 
 fn listen_arp(
-    interface_name: &str,
     arp_request_counts: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>,
+    channel: &mut DataLinkChannel,
 ) -> ArpInfo {
-    let mut channel = open_channel(interface_name);
-
-    println!("Listening for ARP requests on {}", interface_name);
+    println!("Listening for ARP requests on {}", channel.interface);
 
     // A map to track ARP request counts for each target IP address
     let request_threshold: u32 = 2;
@@ -92,9 +92,7 @@ fn listen_arp(
     }
 }
 
-fn send_arp_reply(interface_name: &str, arp_request_info: &ArpInfo, passive_mode: bool) {
-    let mut channel = open_channel(interface_name);
-
+fn send_arp_reply(arp_request_info: &ArpInfo, passive_mode: bool, channel: &mut DataLinkChannel) {
     let arp_reply_info = ArpInfo {
         sender_ip: arp_request_info.target_ip,
         target_ip: arp_request_info.target_ip,
@@ -114,7 +112,7 @@ fn send_arp_reply(interface_name: &str, arp_request_info: &ArpInfo, passive_mode
     if !passive_mode {
         let _ = channel
             .tx
-            .send_to(ethernet_packet.packet(), Some(channel.interface))
+            .send_to(ethernet_packet.packet(), Some(channel.interface.clone()))
             .expect("Failed to send ARP reply");
     }
 
@@ -124,8 +122,8 @@ fn send_arp_reply(interface_name: &str, arp_request_info: &ArpInfo, passive_mode
     );
 }
 
-fn open_channel(interface_name: &str) -> DataLinkChannel {
-    let interface = get_interface(interface_name);
+fn open_channel(interface_name: String) -> DataLinkChannel {
+    let interface = get_interface(&interface_name);
     let (tx, rx) = match pnet_datalink::channel(&interface, Default::default()) {
         Ok(Ethernet(tx, rx)) => (tx, rx),
         Ok(_) => panic!("Unhandled channel type"),

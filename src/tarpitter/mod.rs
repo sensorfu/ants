@@ -1,27 +1,18 @@
-use std::{collections::HashMap, net::IpAddr, time::Instant};
-
-use crate::{arp_listener, tcp_listener, virtual_interface};
+use crate::{arp_listener, tcp_listener};
 
 pub fn start_tarpitting(passive_mode: bool) {
-    const INTERFACE_NAME: &str = "eth0";
+    const INTERFACE_NAME: &str = "wlo1";
 
-    let mut arp_request_counts: HashMap<(IpAddr, IpAddr), (u32, Instant)> = HashMap::new();
+    let rx = arp_listener::start_arp_handling(INTERFACE_NAME, passive_mode);
 
-    loop {
-        let (virtual_interface_name, ip_address) = arp_listener::listen_and_reply_unanswered_arps(
-            INTERFACE_NAME,
-            &mut arp_request_counts,
-            passive_mode,
-        );
+    for target_ip in rx {
+        println!("Received target IP: {}", target_ip);
 
-        if let Err(e) = std::thread::spawn(move || {
-            tcp_listener::start_tcp_tarpitting(INTERFACE_NAME, ip_address, passive_mode);
-        })
-        .join()
-        {
-            eprintln!("Error in TCP tarpitting: {:?}", e);
-        }
+        let interface_name = INTERFACE_NAME.to_string();
+        let ip_address = target_ip;
 
-        virtual_interface::remove_macvlan_interface(&virtual_interface_name);
+        std::thread::spawn(move || {
+            tcp_listener::start_tcp_tarpitting(&interface_name, ip_address, passive_mode);
+        });
     }
 }
