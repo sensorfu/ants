@@ -105,7 +105,7 @@ fn send_arp_reply(
         sender_ip: arp_request_info.target_ip,
         target_ip: arp_request_info.target_ip,
         sender_mac: channel.mac_address,
-        target_mac: channel.mac_address,
+        target_mac: arp_request_info.sender_mac,
     };
 
     let mut ethernet_buffer = [0u8; 42]; // 14 bytes for Ethernet + 28 bytes for ARP
