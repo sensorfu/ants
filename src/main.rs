@@ -14,5 +14,5 @@ fn parse_arguments() -> bool {
 async fn main() {
     let passive_mode = parse_arguments();
 
-    tarpitter::start_tarpitting(passive_mode);
+    tarpitter::start_tarpitting(passive_mode).await;
 }
