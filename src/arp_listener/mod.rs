@@ -29,6 +29,21 @@ struct DataLinkChannel {
     mac_address: MacAddr,
 }
 
+pub trait ArpPacketTrait {
+    fn get_target_proto_addr(&self) -> Ipv4Addr;
+    fn get_sender_proto_addr(&self) -> Ipv4Addr;
+}
+
+impl<'a> ArpPacketTrait for ArpPacket<'a> {
+    fn get_target_proto_addr(&self) -> Ipv4Addr {
+        self.get_target_proto_addr()
+    }
+
+    fn get_sender_proto_addr(&self) -> Ipv4Addr {
+        self.get_sender_proto_addr()
+    }
+}
+
 /// Creates thread to handle arp requests and replies
 /// returns IPs which need to be tarpitted with mpsc channel
 pub fn start_arp_handling(interface_name: &str, passive_mode: bool) -> mpsc::Receiver<Ipv4Addr> {
@@ -162,7 +177,7 @@ fn create_arp_packet(ethernet_packet: &mut MutableEthernetPacket, arp_reply_info
 }
 
 fn track_arp_request(
-    arp_packet: &ArpPacket,
+    arp_packet: &dyn ArpPacketTrait,
     arp_request_count: &mut HashMap<(IpAddr, IpAddr), (u32, Instant)>,
     request_threshold: u32,
     request_timeout: Duration,
@@ -231,4 +246,123 @@ fn process_arp_packet<'a>(
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::net::{IpAddr, Ipv4Addr};
+    use std::time::{Duration, Instant};
+
+    // Mock implementation of the ArpPacketTrait for testing
+    struct MockArpPacket {
+        target_proto_addr: Ipv4Addr,
+        sender_proto_addr: Ipv4Addr,
+    }
+
+    impl MockArpPacket {
+        fn new(target_proto_addr: Ipv4Addr, sender_proto_addr: Ipv4Addr) -> Self {
+            Self {
+                target_proto_addr,
+                sender_proto_addr,
+            }
+        }
+    }
+
+    impl ArpPacketTrait for MockArpPacket {
+        fn get_target_proto_addr(&self) -> Ipv4Addr {
+            self.target_proto_addr
+        }
+
+        fn get_sender_proto_addr(&self) -> Ipv4Addr {
+            self.sender_proto_addr
+        }
+    }
+
+    #[test]
+    fn test_no_threshold_reached() {
+        let mock_arp_packet = MockArpPacket::new(
+            Ipv4Addr::new(192, 168, 0, 1),
+            Ipv4Addr::new(192, 168, 0, 100),
+        );
+
+        let mut arp_request_count: HashMap<(IpAddr, IpAddr), (u32, Instant)> = HashMap::new();
+        let request_threshold = 3;
+        let request_timeout = Duration::from_secs(10);
+
+        let result = track_arp_request(
+            &mock_arp_packet,
+            &mut arp_request_count,
+            request_threshold,
+            request_timeout,
+        );
+
+        assert_eq!(result, false);
+        assert_eq!(
+            arp_request_count[&(IpAddr::V4(Ipv4Addr::new(192, 168, 0, 1)), IpAddr::V4(Ipv4Addr::new(192, 168, 0, 100)))]
+                .0,
+            1
+        );
+    }
+
+    #[test]
+    fn test_threshold_reached() {
+        let mock_arp_packet = MockArpPacket::new(
+            Ipv4Addr::new(192, 168, 0, 1),
+            Ipv4Addr::new(192, 168, 0, 100),
+        );
+
+        let mut arp_request_count: HashMap<(IpAddr, IpAddr), (u32, Instant)> = HashMap::new();
+        let request_threshold = 3;
+        let request_timeout = Duration::from_secs(10);
+
+        // Simulate previous requests
+        arp_request_count.insert(
+            (IpAddr::V4(Ipv4Addr::new(192, 168, 0, 1)), IpAddr::V4(Ipv4Addr::new(192, 168, 0, 100))),
+            (2, Instant::now()),
+        );
+
+        let result = track_arp_request(
+            &mock_arp_packet,
+            &mut arp_request_count,
+            request_threshold,
+            request_timeout,
+        );
+
+        assert_eq!(result, true);
+        assert!(arp_request_count.is_empty());
+    }
+
+    #[test]
+    fn test_timeout_resets_count() {
+        let mock_arp_packet = MockArpPacket::new(
+            Ipv4Addr::new(192, 168, 0, 1),
+            Ipv4Addr::new(192, 168, 0, 100),
+        );
+
+        let mut arp_request_count: HashMap<(IpAddr, IpAddr), (u32, Instant)> = HashMap::new();
+        let request_threshold = 3;
+        let request_timeout = Duration::from_secs(10);
+
+
+        arp_request_count.insert(
+            (IpAddr::V4(Ipv4Addr::new(192, 168, 0, 1)), IpAddr::V4(Ipv4Addr::new(192, 168, 0, 100))),
+            (2, Instant::now() - Duration::from_secs(20)),
+        );
+
+        let result = track_arp_request(
+            &mock_arp_packet,
+            &mut arp_request_count,
+            request_threshold,
+            request_timeout,
+        );
+
+        assert_eq!(result, false);
+        assert_eq!(
+            arp_request_count[&(IpAddr::V4(Ipv4Addr::new(192, 168, 0, 1)), IpAddr::V4(Ipv4Addr::new(192, 168, 0, 100)))]
+                .0,
+            1
+        );
+    }
 }
