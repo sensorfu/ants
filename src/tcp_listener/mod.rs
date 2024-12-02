@@ -1,11 +1,11 @@
 use pnet::datalink::{self, Channel::Ethernet};
-use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::MutableIpv4Packet;
 use pnet::packet::tcp::{MutableTcpPacket, TcpFlags};
 use pnet::packet::Packet;
 use pnet::util::{checksum, ipv4_checksum};
 use pnet_base::MacAddr;
-use pnet_packet::ethernet::MutableEthernetPacket;
+use pnet_packet::ethernet::{EtherTypes, MutableEthernetPacket};
+use pnet_packet::ipv4::Ipv4Flags;
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::sync::{mpsc, Arc, Mutex};
@@ -115,26 +115,21 @@ fn validate_tcp_syn_packet(packet_data: &[u8]) -> bool {
     syn_flag && !ack_flag
 }
 
-fn send_syn_ack(
-    interface_name: &str,
+fn create_syn_ack_packet(
+    src_mac: MacAddr,
     dst_mac: MacAddr,
     src_ip: Ipv4Addr,
     dst_ip: Ipv4Addr,
     src_port: u16,
     dst_port: u16,
     received_seq_num: u32,
-) {
-    let interface = datalink::interfaces()
-        .into_iter()
-        .find(|iface| iface.name == interface_name)
-        .expect("Could not find the specified interface");
-
+) -> [u8; 60] {
     let mut eth_buffer = [0u8; 60]; // Ethernet header + IP + TCP
 
     let mut ethernet_packet = MutableEthernetPacket::new(&mut eth_buffer[..]).unwrap();
-    ethernet_packet.set_source(interface.mac.unwrap());
+    ethernet_packet.set_source(src_mac);
     ethernet_packet.set_destination(dst_mac);
-    ethernet_packet.set_ethertype(pnet::packet::ethernet::EtherType(0x0800));
+    ethernet_packet.set_ethertype(EtherTypes::Ipv4);
 
     {
         let ipv4_buffer = &mut eth_buffer[14..34];
@@ -144,7 +139,8 @@ fn send_syn_ack(
         ipv4_packet.set_header_length(5);
         ipv4_packet.set_total_length((20 + 20) as u16);
         ipv4_packet.set_ttl(64);
-        ipv4_packet.set_next_level_protocol(IpNextHeaderProtocols::Tcp);
+        ipv4_packet.set_flags(Ipv4Flags::DontFragment);
+        ipv4_packet.set_next_level_protocol(pnet::packet::ip::IpNextHeaderProtocols::Tcp);
         ipv4_packet.set_source(src_ip);
         ipv4_packet.set_destination(dst_ip);
         ipv4_packet.set_checksum(0);
@@ -159,7 +155,6 @@ fn send_syn_ack(
 
         tcp_packet.set_sequence(1);
         tcp_packet.set_acknowledgement(received_seq_num + 1);
-
         tcp_packet.set_source(src_port);
         tcp_packet.set_destination(dst_port);
         tcp_packet.set_data_offset(5);
@@ -173,10 +168,32 @@ fn send_syn_ack(
             &[],
             &src_ip,
             &dst_ip,
-            IpNextHeaderProtocols::Tcp,
+            pnet::packet::ip::IpNextHeaderProtocols::Tcp,
         );
         tcp_packet.set_checksum(tcp_checksum);
     }
+
+    eth_buffer
+}
+
+fn send_syn_ack(
+    interface_name: &str,
+    dst_mac: MacAddr,
+    src_ip: Ipv4Addr,
+    dst_ip: Ipv4Addr,
+    src_port: u16,
+    dst_port: u16,
+    received_seq_num: u32,
+) {
+    let interface = datalink::interfaces()
+        .into_iter()
+        .find(|iface| iface.name == interface_name)
+        .expect("Could not find the specified interface");
+
+    let src_mac = interface.mac.unwrap();
+    let eth_buffer = create_syn_ack_packet(
+        src_mac, dst_mac, src_ip, dst_ip, src_port, dst_port, received_seq_num,
+    );
 
     match datalink::channel(&interface, Default::default()) {
         Ok(Ethernet(mut tx, _)) => {
@@ -216,4 +233,203 @@ fn handle_packet(packet: &[u8], interface: &str, passive_mode: bool) -> Option<I
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pnet::packet::ethernet::{EthernetPacket, EtherTypes};
+    use pnet::packet::ipv4::Ipv4Packet;
+    use pnet::packet::tcp::{TcpFlags, TcpPacket};
+
+    #[test]
+    fn test_create_syn_ack_packet_ethernet_header() {
+        let src_mac = MacAddr::new(0x00, 0x11, 0x22, 0x33, 0x44, 0x55);
+        let dst_mac = MacAddr::new(0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB);
+        let src_ip = Ipv4Addr::new(192, 168, 0, 1);
+        let dst_ip = Ipv4Addr::new(192, 168, 0, 2);
+        let src_port = 12345;
+        let dst_port = 80;
+        let received_seq_num = 42;
+
+        let packet = create_syn_ack_packet(
+            src_mac,
+            dst_mac,
+            src_ip,
+            dst_ip,
+            src_port,
+            dst_port,
+            received_seq_num,
+        );
+
+        let eth_packet = EthernetPacket::new(&packet).unwrap();
+        assert_eq!(eth_packet.get_source(), src_mac);
+        assert_eq!(eth_packet.get_destination(), dst_mac);
+        assert_eq!(eth_packet.get_ethertype(), EtherTypes::Ipv4);
+    }
+
+    #[test]
+    fn test_create_syn_ack_packet_ipv4_header() {
+        let src_mac = MacAddr::new(0x00, 0x11, 0x22, 0x33, 0x44, 0x55);
+        let dst_mac = MacAddr::new(0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB);
+        let src_ip = Ipv4Addr::new(192, 168, 0, 1);
+        let dst_ip = Ipv4Addr::new(192, 168, 0, 2);
+        let src_port = 12345;
+        let dst_port = 80;
+        let received_seq_num = 42;
+
+        let packet = create_syn_ack_packet(
+            src_mac,
+            dst_mac,
+            src_ip,
+            dst_ip,
+            src_port,
+            dst_port,
+            received_seq_num,
+        );
+
+        let ipv4_packet = Ipv4Packet::new(&packet[14..34]).unwrap();
+        assert_eq!(ipv4_packet.get_source(), src_ip);
+        assert_eq!(ipv4_packet.get_destination(), dst_ip);
+        assert_eq!(ipv4_packet.get_version(), 4);
+        assert_eq!(ipv4_packet.get_header_length(), 5);
+        assert_eq!(ipv4_packet.get_total_length(), 40);
+        assert_eq!(ipv4_packet.get_ttl(), 64);
+        assert_eq!(
+            ipv4_packet.get_next_level_protocol(),
+            pnet::packet::ip::IpNextHeaderProtocols::Tcp
+        );
+    }
+
+    #[test]
+    fn test_create_syn_ack_packet_tcp_header() {
+        let src_mac = MacAddr::new(0x00, 0x11, 0x22, 0x33, 0x44, 0x55);
+        let dst_mac = MacAddr::new(0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB);
+        let src_ip = Ipv4Addr::new(192, 168, 0, 1);
+        let dst_ip = Ipv4Addr::new(192, 168, 0, 2);
+        let src_port = 12345;
+        let dst_port = 80;
+        let received_seq_num = 42;
+
+        let packet = create_syn_ack_packet(
+            src_mac,
+            dst_mac,
+            src_ip,
+            dst_ip,
+            src_port,
+            dst_port,
+            received_seq_num,
+        );
+
+        let tcp_packet = TcpPacket::new(&packet[34..54]).unwrap();
+        assert_eq!(tcp_packet.get_source(), src_port);
+        assert_eq!(tcp_packet.get_destination(), dst_port);
+        assert_eq!(tcp_packet.get_sequence(), 1);
+        assert_eq!(tcp_packet.get_acknowledgement(), received_seq_num + 1);
+        assert_eq!(tcp_packet.get_data_offset(), 5);
+        assert_eq!(tcp_packet.get_flags(), TcpFlags::SYN | TcpFlags::ACK);
+        assert_eq!(tcp_packet.get_window(), 1024);
+    }
+
+    fn create_mock_tcp_syn_packet() -> Vec<u8> {
+        let mut packet = vec![0u8; 54];
+        // Set Ethernet type to IPv4 (0x0800)
+        packet[12] = 0x08;
+        packet[13] = 0x00;
+        // Set IPv4 protocol to TCP (6)
+        packet[23] = 0x06;
+        // Set TCP flags to SYN
+        packet[34 + 13] = 0b0000_0010;
+        packet
+    }
+
+    fn create_mock_tcp_syn_ack_packet() -> Vec<u8> {
+        let mut packet = create_mock_tcp_syn_packet();
+        // Set TCP flags to SYN-ACK
+        packet[34 + 13] = 0b0001_0010;
+        packet
+    }
+
+    fn create_non_tcp_packet() -> Vec<u8> {
+        let mut packet = create_mock_tcp_syn_packet();
+        // Set IPv4 protocol to something other than TCP
+        packet[23] = 0x11;
+        packet
+    }
+
+    fn create_non_ipv4_packet() -> Vec<u8> {
+        let mut packet = create_mock_tcp_syn_packet();
+        // Set Ethernet type to something other than IPv4
+        packet[12] = 0x08;
+        packet[13] = 0x06;
+        packet
+    }
+
+    #[test]
+    fn test_validate_tcp_syn_packet_valid_syn() {
+        let packet = create_mock_tcp_syn_packet();
+        assert!(validate_tcp_syn_packet(&packet));
+    }
+
+    #[test]
+    fn test_validate_tcp_syn_packet_valid_syn_ack() {
+        let packet = create_mock_tcp_syn_ack_packet();
+        assert!(!validate_tcp_syn_packet(&packet));
+    }
+
+    #[test]
+    fn test_validate_tcp_syn_packet_non_tcp() {
+        let packet = create_non_tcp_packet();
+        assert!(!validate_tcp_syn_packet(&packet));
+    }
+
+    #[test]
+    fn test_validate_tcp_syn_packet_non_ipv4() {
+        let packet = create_non_ipv4_packet();
+        assert!(!validate_tcp_syn_packet(&packet));
+    }
+
+    #[test]
+    fn test_validate_tcp_syn_packet_too_small() {
+        let packet = vec![0u8; 40]; // Smaller than the minimum packet size
+        assert!(!validate_tcp_syn_packet(&packet));
+    }
+
+    #[test]
+    fn test_handle_packet_passive_mode() {
+        let packet = vec![
+            0, 0, 0, 0, 0, 0, // Padding (simulate irrelevant initial data)
+            0, 0, 0, 0, 0, 0, // Ethernet header (destination MAC)
+            1, 2, 3, 4, 5, 6, // Ethernet header (source MAC)
+            0, 0, 0, 0, 0, 0, 0, 0, // Padding to IPv4 header
+            192, 168, 0, 1, // Source IP
+            192, 168, 0, 2, // Destination IP
+            0, 80, // Source port (80)
+            0, 42, // Destination port (443)
+            0, 0, 0, 42, // Sequence number
+        ];
+
+        let result = handle_packet(&packet, "eth0", true);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_handle_packet_active_mode() {
+        let packet = vec![
+            0, 0, 0, 0, 0, 0, // Padding (simulate irrelevant initial data)
+            0, 0, 0, 0, 0, 0, // Ethernet header (destination MAC)
+            1, 2, 3, 4, 5, 6, // Ethernet header (source MAC)
+            0, 0, 0, 0, 0, 0, 0, 0, // Padding to IPv4 header
+            192, 168, 0, 1, // Source IP
+            192, 168, 0, 2, // Destination IP
+            0, 80, // Source port (80)
+            0, 42, // Destination port (443)
+            0, 0, 0, 42, // Sequence number
+        ];
+
+        let result = handle_packet(&packet, "eth0", false);
+
+        assert_eq!(result, Some(Ipv4Addr::new(192, 168, 0, 2)));
+    }
 }
