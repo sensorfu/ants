@@ -192,7 +192,13 @@ fn send_syn_ack(
 
     let src_mac = interface.mac.unwrap();
     let eth_buffer = create_syn_ack_packet(
-        src_mac, dst_mac, src_ip, dst_ip, src_port, dst_port, received_seq_num,
+        src_mac,
+        dst_mac,
+        src_ip,
+        dst_ip,
+        src_port,
+        dst_port,
+        received_seq_num,
     );
 
     match datalink::channel(&interface, Default::default()) {
@@ -238,7 +244,7 @@ fn handle_packet(packet: &[u8], interface: &str, passive_mode: bool) -> Option<I
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pnet::packet::ethernet::{EthernetPacket, EtherTypes};
+    use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
     use pnet::packet::ipv4::Ipv4Packet;
     use pnet::packet::tcp::{TcpFlags, TcpPacket};
 

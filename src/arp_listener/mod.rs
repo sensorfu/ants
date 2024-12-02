@@ -250,7 +250,7 @@ fn process_arp_packet<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pnet::packet::arp::{ArpHardwareType, ArpOperations, ArpOperation, MutableArpPacket};
+    use pnet::packet::arp::{ArpHardwareType, ArpOperation, ArpOperations, MutableArpPacket};
     use pnet::packet::ethernet::{EthernetPacket, MutableEthernetPacket};
     use std::collections::HashMap;
     use std::net::{IpAddr, Ipv4Addr};
