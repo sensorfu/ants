@@ -34,7 +34,7 @@ pub trait ArpPacketTrait {
     fn get_sender_proto_addr(&self) -> Ipv4Addr;
 }
 
-impl<'a> ArpPacketTrait for ArpPacket<'a> {
+impl ArpPacketTrait for ArpPacket<'_> {
     fn get_target_proto_addr(&self) -> Ipv4Addr {
         self.get_target_proto_addr()
     }
