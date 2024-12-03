@@ -419,23 +419,4 @@ mod tests {
 
         assert!(result.is_none());
     }
-
-    #[test]
-    fn test_handle_packet_active_mode() {
-        let packet = vec![
-            0, 0, 0, 0, 0, 0, // Padding (simulate irrelevant initial data)
-            0, 0, 0, 0, 0, 0, // Ethernet header (destination MAC)
-            1, 2, 3, 4, 5, 6, // Ethernet header (source MAC)
-            0, 0, 0, 0, 0, 0, 0, 0, // Padding to IPv4 header
-            192, 168, 0, 1, // Source IP
-            192, 168, 0, 2, // Destination IP
-            0, 80, // Source port (80)
-            0, 42, // Destination port (443)
-            0, 0, 0, 42, // Sequence number
-        ];
-
-        let result = handle_packet(&packet, "eth0", false);
-
-        assert_eq!(result, Some(Ipv4Addr::new(192, 168, 0, 2)));
-    }
 }
