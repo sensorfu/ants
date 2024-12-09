@@ -6,7 +6,6 @@ use std::env;
 use std::process;
 use tracing::error;
 
-
 fn parse_arguments() -> (bool, String) {
     let args: Vec<String> = env::args().collect();
 
