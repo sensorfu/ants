@@ -11,3 +11,5 @@ pnet = "0.35.0"
 pnet_packet = "0.35.0"
 pnet_datalink = "0.35.0"
 pnet_base = "0.35.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

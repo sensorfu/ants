@@ -9,6 +9,7 @@ use pnet_packet::arp::{ArpHardwareTypes, ArpOperations, ArpPacket, MutableArpPac
 use pnet_packet::ethernet::{EtherTypes, EthernetPacket, MutableEthernetPacket};
 use pnet_packet::MutablePacket;
 use pnet_packet::Packet;
+use tracing::{debug, error};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::mpsc;
@@ -59,7 +60,7 @@ pub fn start_arp_handling(interface_name: &str, passive_mode: bool) -> mpsc::Rec
             send_arp_reply(&arp_request_info, passive_mode, &mut channel);
 
             if tx.send(arp_request_info.target_ip).is_err() {
-                println!("Receiver dropped, exiting ARP handling thread.");
+                error!("Receiver dropped, exiting ARP handling thread.");
                 break;
             }
         }
@@ -99,7 +100,7 @@ fn listen_arp(
                 }
             }
             Err(e) => {
-                println!("An error occurred while reading: {}", e);
+                error!("An error occurred while reading: {}", e);
             }
         }
     }
@@ -129,7 +130,7 @@ fn send_arp_reply(arp_request_info: &ArpInfo, passive_mode: bool, channel: &mut 
             .expect("Failed to send ARP reply");
     }
 
-    println!(
+    debug!(
         "Sent ARP reply: {} is at {:?} from {}",
         arp_reply_info.target_ip, arp_reply_info.target_ip, arp_reply_info.sender_ip
     );
@@ -197,7 +198,7 @@ fn track_arp_request(
     entry.1 = now;
 
     if entry.0 >= request_threshold {
-        println!(
+        debug!(
             "Detected {} unanswered ARP requests for {}",
             request_threshold, target_ip
         );
@@ -225,7 +226,7 @@ fn process_arp_packet<'a>(
 
         match arp_packet.get_operation() {
             ArpOperations::Request => {
-                println!("ARP Request: {} is asking for {}", sender_ip, target_ip);
+                debug!("ARP Request: {} is asking for {}", sender_ip, target_ip);
                 let threshold_exceeded: bool = track_arp_request(
                     &arp_packet,
                     arp_request_count,
@@ -238,7 +239,7 @@ fn process_arp_packet<'a>(
                 }
             }
             ArpOperations::Reply => {
-                println!("ARP Reply: {} is at {:?}", sender_ip, sender_hw);
+                debug!("ARP Reply: {} is at {:?}", sender_ip, sender_hw);
                 arp_request_count.remove(&(IpAddr::V4(target_ip), IpAddr::V4(sender_ip)));
             }
             _ => {}

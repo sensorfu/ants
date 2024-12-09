@@ -6,6 +6,7 @@ use pnet::util::{checksum, ipv4_checksum};
 use pnet_base::MacAddr;
 use pnet_packet::ethernet::{EtherTypes, MutableEthernetPacket};
 use pnet_packet::ipv4::Ipv4Flags;
+use tracing::{debug, info};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::sync::{mpsc, Arc, Mutex};
@@ -35,7 +36,7 @@ pub fn start_tcp_tarpitting(
             .open()
             .unwrap();
 
-        println!(
+        info!(
             "Listening for incoming TCP SYN packets on interface {}...",
             interface_name
         );
@@ -76,7 +77,7 @@ pub fn start_tcp_tarpitting(
                         if response_ip == dst_ip {
                             let mut ips = ips_to_tarpit_clone.lock().unwrap();
                             ips.insert(dst_ip, Instant::now());
-                            println!("Response sent for IP: {}", dst_ip);
+                            debug!("Response sent for IP: {}", dst_ip);
                         }
                     }
                 });
@@ -204,7 +205,7 @@ fn send_syn_ack(
     match datalink::channel(&interface, Default::default()) {
         Ok(Ethernet(mut tx, _)) => {
             let _ = tx.send_to(&eth_buffer, None).unwrap();
-            println!("Sent SYN/ACK packet");
+            debug!("Sent SYN/ACK packet");
         }
         Ok(_) => panic!("Unhandled channel type"),
         Err(e) => panic!("Failed to send packet: {}", e),
