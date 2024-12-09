@@ -11,6 +11,7 @@ use std::net::Ipv4Addr;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+use tracing::{error, info};
 
 // start listening to tcp and respond to TCP handshakes in the given interface
 pub fn start_tcp_tarpitting(
@@ -25,7 +26,7 @@ pub fn start_tcp_tarpitting(
             .into_iter()
             .find(|dev| dev.name == interface_name)
             .unwrap_or_else(|| {
-                eprintln!("Could not find device {}", interface_name);
+                error!("Could not find device {}", interface_name);
                 std::process::exit(1);
             });
 
@@ -35,7 +36,7 @@ pub fn start_tcp_tarpitting(
             .open()
             .unwrap();
 
-        println!(
+        info!(
             "Listening for incoming TCP SYN packets on interface {}...",
             interface_name
         );
@@ -76,7 +77,7 @@ pub fn start_tcp_tarpitting(
                         if response_ip == dst_ip {
                             let mut ips = ips_to_tarpit_clone.lock().unwrap();
                             ips.insert(dst_ip, Instant::now());
-                            println!("Response sent for IP: {}", dst_ip);
+                            info!("Response sent for IP: {}", dst_ip);
                         }
                     }
                 });
@@ -204,7 +205,7 @@ fn send_syn_ack(
     match datalink::channel(&interface, Default::default()) {
         Ok(Ethernet(mut tx, _)) => {
             let _ = tx.send_to(&eth_buffer, None).unwrap();
-            println!("Sent SYN/ACK packet");
+            info!("Sent SYN/ACK packet");
         }
         Ok(_) => panic!("Unhandled channel type"),
         Err(e) => panic!("Failed to send packet: {}", e),

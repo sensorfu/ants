@@ -14,7 +14,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-
+use tracing::info;
 struct ArpInfo {
     sender_ip: Ipv4Addr,
     target_ip: Ipv4Addr,
@@ -59,7 +59,7 @@ pub fn start_arp_handling(interface_name: &str, passive_mode: bool) -> mpsc::Rec
             send_arp_reply(&arp_request_info, passive_mode, &mut channel);
 
             if tx.send(arp_request_info.target_ip).is_err() {
-                println!("Receiver dropped, exiting ARP handling thread.");
+                info!("Receiver dropped, exiting ARP handling thread.");
                 break;
             }
         }
@@ -99,7 +99,7 @@ fn listen_arp(
                 }
             }
             Err(e) => {
-                println!("An error occurred while reading: {}", e);
+                info!("An error occurred while reading: {}", e);
             }
         }
     }
@@ -129,7 +129,7 @@ fn send_arp_reply(arp_request_info: &ArpInfo, passive_mode: bool, channel: &mut 
             .expect("Failed to send ARP reply");
     }
 
-    println!(
+    info!(
         "Sent ARP reply: {} is at {:?} from {}",
         arp_reply_info.target_ip, arp_reply_info.target_ip, arp_reply_info.sender_ip
     );
@@ -197,7 +197,7 @@ fn track_arp_request(
     entry.1 = now;
 
     if entry.0 >= request_threshold {
-        println!(
+        info!(
             "Detected {} unanswered ARP requests for {}",
             request_threshold, target_ip
         );
@@ -225,7 +225,7 @@ fn process_arp_packet<'a>(
 
         match arp_packet.get_operation() {
             ArpOperations::Request => {
-                println!("ARP Request: {} is asking for {}", sender_ip, target_ip);
+                info!("ARP Request: {} is asking for {}", sender_ip, target_ip);
                 let threshold_exceeded: bool = track_arp_request(
                     &arp_packet,
                     arp_request_count,
@@ -238,7 +238,7 @@ fn process_arp_packet<'a>(
                 }
             }
             ArpOperations::Reply => {
-                println!("ARP Reply: {} is at {:?}", sender_ip, sender_hw);
+                info!("ARP Reply: {} is at {:?}", sender_ip, sender_hw);
                 arp_request_count.remove(&(IpAddr::V4(target_ip), IpAddr::V4(sender_ip)));
             }
             _ => {}
