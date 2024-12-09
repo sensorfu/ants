@@ -5,7 +5,7 @@ mod tcp_listener;
 use std::env;
 use std::process;
 use tracing::error;
-use tracing_subscriber;
+
 
 fn parse_arguments() -> (bool, String) {
     let args: Vec<String> = env::args().collect();
