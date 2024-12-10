@@ -6,12 +6,12 @@ use pnet::util::{checksum, ipv4_checksum};
 use pnet_base::MacAddr;
 use pnet_packet::ethernet::{EtherTypes, MutableEthernetPacket};
 use pnet_packet::ipv4::Ipv4Flags;
-use tracing::{debug, info};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+use tracing::{debug, info};
 
 // start listening to tcp and respond to TCP handshakes in the given interface
 pub fn start_tcp_tarpitting(

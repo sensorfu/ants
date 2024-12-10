@@ -9,12 +9,12 @@ use pnet_packet::arp::{ArpHardwareTypes, ArpOperations, ArpPacket, MutableArpPac
 use pnet_packet::ethernet::{EtherTypes, EthernetPacket, MutableEthernetPacket};
 use pnet_packet::MutablePacket;
 use pnet_packet::Packet;
-use tracing::{debug, error};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+use tracing::{debug, error};
 
 struct ArpInfo {
     sender_ip: Ipv4Addr,

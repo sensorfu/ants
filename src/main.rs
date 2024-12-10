@@ -13,9 +13,7 @@ fn init_tracing(log_level: &str) {
         EnvFilter::new("info")
     });
 
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .init();
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 }
 
 fn parse_arguments() -> (bool, String, String) {
@@ -60,7 +58,10 @@ fn main() {
 
     init_tracing(&log_level);
 
-    info!("Starting tarpitting in {} mode", if passive_mode { "passive" } else { "active" });
+    info!(
+        "Starting tarpitting in {} mode",
+        if passive_mode { "passive" } else { "active" }
+    );
     info!("Interface: {}", interface_name);
 
     tarpitter::start_tarpitting(passive_mode, &interface_name);
